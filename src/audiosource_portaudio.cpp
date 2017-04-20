@@ -68,7 +68,10 @@ namespace {
 		audiosource_portaudio* pa = static_cast<audiosource_portaudio*>(userData);
 
 		// std::cerr << " out buffer size " << frameCount << " flags " << statusFlags << std::endl;
+		//std::cout << " curr time: " << timeInfo->currentTime << " out time " << timeInfo->outputBufferDacTime << std::endl;
 
+		pa->set_first_sample_delay(timeInfo->outputBufferDacTime);
+		
 		if (pa->get_listener()) {
 			float* foutput = static_cast<float*>(output);
 
@@ -235,6 +238,11 @@ void audiosource_portaudio::list_devices() {
 			<< " MaxOutCH=" << devinfo ->maxOutputChannels 
 			<< " defaultSampleRate=" << devinfo ->defaultSampleRate << std::endl;
 	}
+}
+
+double audiosource_portaudio::stream_time() {
+	PaTime time = Pa_GetStreamTime(stream_out);
+	return (double)time;
 }
 
 } /* namespace extmodem */

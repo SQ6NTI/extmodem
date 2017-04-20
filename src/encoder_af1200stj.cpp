@@ -37,12 +37,15 @@
 #include <cmath>
 #include <iostream>
 #include <cstdio>
+#include <chrono>
 
 #include "hdlc.h"
 #include "audiosource.h"
 #include "extconfig.h"
 
 #include "encoder_af1200stj.h"
+
+using namespace std::chrono;
 
 namespace extmodem {
 
@@ -56,6 +59,7 @@ encoder_af1200stj::encoder_af1200stj() {
 	tx_last_symbol = 0;
 	tx_stuff_count = 0;
 	out_queue_ptr_ = 0;
+	ptt_time = milliseconds(0);
 }
 
 encoder_af1200stj::~encoder_af1200stj() {
@@ -75,8 +79,15 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 
 	{
 		boost::lock_guard<boost::mutex> guard_(out_queue_mutex_);
-		if (!out_queue_.empty() && !ptt_->get_tx())
+		if (!out_queue_.empty() && !ptt_->get_tx()) {
+			//std::cout << " current first sample delay: " << a->get_first_sample_delay() << std::endl;
+			double ptt_time_sec = (double)out_queue_.front()->size() / a->get_sample_rate();
+			double first_sample_delay = a->get_first_sample_delay();
+			ptt_time = milliseconds((int)(1000 * (ptt_time_sec + first_sample_delay)));
+			//std::cout << " current PTT time: " << ptt_time.count() << std::endl;
+			t1 = high_resolution_clock::now();
 			ptt_->set_tx(1);
+		}
 	}
 
 	if (num_channels >= 1) {
@@ -92,7 +103,8 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 			}
 
 			// std::cout << " out quedan " << out_queue_.size() << " tope de " << p->size() << std::endl;
-
+			//std::cout << " out queue size: " << out_queue_.size() << " current element size: " << p->size() << std::endl;
+			
 			while ((i < buffer_size) && (out_queue_ptr_ < p->size())) {
 				for (ch_idx = 0; ch_idx < num_channels; ++ch_idx) {
 					buffer[i] = p->at(out_queue_ptr_);
@@ -105,6 +117,8 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 				boost::lock_guard<boost::mutex> guard_(out_queue_mutex_);
 				out_queue_.pop_front();
 				out_queue_ptr_ = 0;
+				
+				//std::cout << " out queue emptied"<< std::endl;
 			}
 		}
 	}
@@ -114,8 +128,14 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 
 	{
 		boost::lock_guard<boost::mutex> guard_(out_queue_mutex_);
-		if (out_queue_.empty() && ptt_->get_tx())
+		t2 = high_resolution_clock::now();
+		auto time_passed = duration_cast<milliseconds>( t2 - t1 );
+		if (out_queue_.empty() && ptt_->get_tx() && time_passed > ptt_time) {
 			ptt_->set_tx(0);
+			//std::cout << " final PTT duration: " << time_passed.count()  << std::endl;
+		} /*else {
+			std::cout << " current PTT duration: " << time_passed.count()  << std::endl;
+		}*/
 	}
 }
 

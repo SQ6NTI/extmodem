@@ -49,16 +49,22 @@ public:
 
 	virtual void list_devices();
 	
+	virtual double stream_time();
+	
 	void set_listener(audiosourcelistener* p) { listener_ = p; }
 	audiosourcelistener* get_listener() const { return listener_; }
 
 	int get_sample_rate() const { return sample_rate_; }
 	int get_in_channel_count();
 	int get_out_channel_count();
+	
+	void set_first_sample_delay(double delay) { first_sample_delay = delay; }
+	double get_first_sample_delay() const { return first_sample_delay; }
 
 private:
 	int sample_rate_;
 	audiosourcelistener* listener_;
+	double first_sample_delay;
 };
 
 } /* namespace extmodem */

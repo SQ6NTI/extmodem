@@ -38,6 +38,8 @@ public:
 
 	virtual void list_devices();
 	
+	virtual double stream_time();
+	
 private:
 	void init();
 	void close();

@@ -36,6 +36,7 @@
 #include <vector>
 #include <deque>
 #include <cstdlib>
+#include <chrono>
 
 #include <boost/smart_ptr.hpp>
 #include <boost/thread.hpp>
@@ -75,6 +76,9 @@ private:
 	boost::mutex out_queue_mutex_;
 	std::size_t out_queue_ptr_;
 	ptt_ptr ptt_;
+	
+	std::chrono::milliseconds ptt_time;
+	std::chrono::high_resolution_clock::time_point t1, t2;
 };
 
 } /* namespace extmodem */

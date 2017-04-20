@@ -45,4 +45,9 @@ void audiosource::list_devices() {
 	std::cerr << "UNIMPLEMENTED" << std::endl;
 }
 
+double audiosource::stream_time() {
+	std::cerr << "UNIMPLEMENTED" << std::endl;
+	return 0;
+}
+
 } /* namespace extmodem */
