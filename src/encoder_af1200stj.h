@@ -60,6 +60,7 @@ private:
 	typedef boost::shared_ptr< std::vector<float> > buffer_ptr;
 
 	void generateSymbolSamples(int symbol);
+	void pttTimer(const double latency, const double ptt_time_sec, const double first_sample_delay);
 	int byteToSymbols(int bits, bool stuff);
 
 	float tx_symbol_phase;
@@ -78,7 +79,8 @@ private:
 	ptt_ptr ptt_;
 	
 	std::chrono::milliseconds ptt_time;
-	std::chrono::high_resolution_clock::time_point t1, t2;
+	std::chrono::high_resolution_clock::time_point ptt_start, ptt_end;
+	bool ptt_thread_running;
 };
 
 } /* namespace extmodem */

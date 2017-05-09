@@ -38,14 +38,13 @@
 #include <iostream>
 #include <cstdio>
 #include <chrono>
+#include <thread>
 
 #include "hdlc.h"
 #include "audiosource.h"
 #include "extconfig.h"
 
 #include "encoder_af1200stj.h"
-
-using namespace std::chrono;
 
 namespace extmodem {
 
@@ -59,7 +58,7 @@ encoder_af1200stj::encoder_af1200stj() {
 	tx_last_symbol = 0;
 	tx_stuff_count = 0;
 	out_queue_ptr_ = 0;
-	ptt_time = milliseconds(0);
+	ptt_time = std::chrono::milliseconds(0);
 }
 
 encoder_af1200stj::~encoder_af1200stj() {
@@ -72,6 +71,9 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 	int ch_idx;
 	std::size_t i = 0;
 	std::size_t buffer_size = length;
+	double output_latency;
+	double ptt_time_sec;
+	double first_sample_delay;
 
 	/* BEWARE: The channels samples are INTERLEAVED. There are (length * num_channels) elements in "buffer" array. */
 
@@ -79,14 +81,13 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 
 	{
 		boost::lock_guard<boost::mutex> guard_(out_queue_mutex_);
-		if (!out_queue_.empty() && !ptt_->get_tx()) {
-			//std::cout << " current first sample delay: " << a->get_first_sample_delay() << std::endl;
-			double ptt_time_sec = (double)out_queue_.front()->size() / a->get_sample_rate();
-			double first_sample_delay = a->get_first_sample_delay();
-			ptt_time = milliseconds((int)(1000 * (ptt_time_sec + first_sample_delay)));
-			//std::cout << " current PTT time: " << ptt_time.count() << std::endl;
-			t1 = high_resolution_clock::now();
-			ptt_->set_tx(1);
+		if (!out_queue_.empty() && !ptt_->get_tx() && !ptt_thread_running) {
+			output_latency = a->get_output_latency();
+			ptt_time_sec = (double)out_queue_.front()->size() / a->get_sample_rate();
+			first_sample_delay = a->get_first_sample_delay();
+			ptt_thread_running = true;
+			std::thread t1(&encoder_af1200stj::pttTimer, this, output_latency, ptt_time_sec, first_sample_delay);
+			t1.detach();
 		}
 	}
 
@@ -102,8 +103,7 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 				p = out_queue_.front();
 			}
 
-			// std::cout << " out quedan " << out_queue_.size() << " tope de " << p->size() << std::endl;
-			//std::cout << " out queue size: " << out_queue_.size() << " current element size: " << p->size() << std::endl;
+			// std::cout << " out queue size: " << out_queue_.size() << " current element size: " << p->size() << std::endl;
 			
 			while ((i < buffer_size) && (out_queue_ptr_ < p->size())) {
 				for (ch_idx = 0; ch_idx < num_channels; ++ch_idx) {
@@ -118,7 +118,7 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 				out_queue_.pop_front();
 				out_queue_ptr_ = 0;
 				
-				//std::cout << " out queue emptied"<< std::endl;
+				// std::cout << " out queue emptied"<< std::endl;
 			}
 		}
 	}
@@ -128,14 +128,13 @@ void encoder_af1200stj::output_callback(audiosource* a, float* buffer, unsigned 
 
 	{
 		boost::lock_guard<boost::mutex> guard_(out_queue_mutex_);
-		t2 = high_resolution_clock::now();
-		auto time_passed = duration_cast<milliseconds>( t2 - t1 );
+		ptt_end = std::chrono::high_resolution_clock::now();
+		auto time_passed = std::chrono::duration_cast<std::chrono::milliseconds>( ptt_end - ptt_start );
 		if (out_queue_.empty() && ptt_->get_tx() && time_passed > ptt_time) {
 			ptt_->set_tx(0);
-			//std::cout << " final PTT duration: " << time_passed.count()  << std::endl;
-		} /*else {
-			std::cout << " current PTT duration: " << time_passed.count()  << std::endl;
-		}*/
+			// std::cout << " --- PTT OFF --- "  << std::endl;
+			// std::cout << " final PTT duration: " << time_passed.count()  << std::endl;
+		}
 	}
 }
 
@@ -148,6 +147,20 @@ void encoder_af1200stj::init(audiosource* a) {
 
 	ptt_ = ptt::factory(config::Instance()->ptt_mode());
 	ptt_->init(config::Instance()->ptt_port().c_str());
+	ptt_thread_running = false;
+}
+
+void encoder_af1200stj::pttTimer(const double latency, const double ptt_time_sec, const double first_sample_delay) {
+	// std::cout << "PTT timer start (waiting "<< latency << "s)" << std::endl;
+	auto start = std::chrono::high_resolution_clock::now();
+	std::this_thread::sleep_until(start + std::chrono::seconds((int)latency));
+	// thread done waiting for the specified latency, proceed to tx
+	ptt_time = std::chrono::milliseconds((int)(1000 * (ptt_time_sec + first_sample_delay)));
+	// std::cout << " current PTT time: " << ptt_time.count() << std::endl;
+	ptt_start = std::chrono::high_resolution_clock::now();
+	ptt_->set_tx(1);
+	// std::cout << " --- PTT ON --- "  << std::endl;
+	ptt_thread_running = false;
 }
 
 void encoder_af1200stj::generateSymbolSamples(int symbol) {

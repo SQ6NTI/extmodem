@@ -68,9 +68,10 @@ namespace {
 		audiosource_portaudio* pa = static_cast<audiosource_portaudio*>(userData);
 
 		// std::cerr << " out buffer size " << frameCount << " flags " << statusFlags << std::endl;
-		//std::cout << " curr time: " << timeInfo->currentTime << " out time " << timeInfo->outputBufferDacTime << std::endl;
+		// std::cout << " curr time: " << timeInfo->currentTime << " out DAC time " << timeInfo->outputBufferDacTime << std::endl;
 
 		pa->set_first_sample_delay(timeInfo->outputBufferDacTime);
+		pa->set_current_time(timeInfo->currentTime);
 		
 		if (pa->get_listener()) {
 			float* foutput = static_cast<float*>(output);
@@ -177,6 +178,14 @@ void audiosource_portaudio::init() {
 		std::cerr << "PortAudio out error: " << Pa_GetErrorText( err ) << std::endl;
 		throw audiosourceexception("Pa_StartStream");
 	}
+	
+	const PaStreamInfo *streamInfo = Pa_GetStreamInfo(stream_out);
+	if (streamInfo == nullptr) {
+		std::cerr << "PortAudio out error: cannot get stream info" << std::endl;
+		throw audiosourceexception("Pa_GetStreamInfo");
+	}
+	std::cout << "Output latency: " << (double)streamInfo->outputLatency << "s"<< std::endl;
+	set_output_latency((double)streamInfo->outputLatency);
 }
 
 void audiosource_portaudio::close() {

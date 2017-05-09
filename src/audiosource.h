@@ -60,11 +60,17 @@ public:
 	
 	void set_first_sample_delay(double delay) { first_sample_delay = delay; }
 	double get_first_sample_delay() const { return first_sample_delay; }
+	void set_current_time(double delay) { current_time = delay; }
+	double get_current_time() const { return current_time; }
+	void set_output_latency(double latency) { output_latency = latency; }
+	double get_output_latency() const { return output_latency; }
 
 private:
 	int sample_rate_;
 	audiosourcelistener* listener_;
 	double first_sample_delay;
+	double current_time;
+	double output_latency;
 };
 
 } /* namespace extmodem */
